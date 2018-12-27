@@ -16,8 +16,7 @@ import tempfile
 import warnings
 
 from .logger import LOGGER
-from .text import (
-    cairo, dlopen, ffi, get_font_features, gobject, pango, pangocairo)
+from .text import cairo, dlopen, ffi, get_font_features, pango, pangocairo
 from .urls import FILESYSTEM_ENCODING, fetch
 
 # Cairo crashes with font-size: 0 when using Win32 API
@@ -34,7 +33,10 @@ class FontConfiguration:
 
     def __init__(self):
         """Create a font configuration before rendering a document."""
-        self.font_map = None
+        self.config_is_ok = False
+
+    def set_font_map_config(self, font_map):
+        """Set current font configuration to given font map."""
 
     def add_font_face(self, rule_descriptors, url_fetcher):
         """Add a font into the application."""
@@ -125,7 +127,7 @@ else:
         typedef ... PangoCairoFontMap;
 
         void pango_cairo_font_map_set_default (PangoCairoFontMap *fontmap);
-        PangoFontMap * pango_cairo_font_map_new_for_font_type (
+        PangoCairoFontMap * pango_cairo_font_map_new_for_font_type (
             cairo_font_type_t fonttype);
     ''')
 
@@ -160,6 +162,9 @@ else:
         'extra-expanded': 'extraexpanded',
         'ultra-expanded': 'ultraexpanded',
     }
+
+    pangocairo.pango_cairo_font_map_set_default(
+        pangocairo.pango_cairo_font_map_new_for_font_type(cairo.FONT_TYPE_FT))
 
     def _check_font_configuration(font_config, warn=False):
         """Check whether the given font_config has fonts.
@@ -247,22 +252,12 @@ else:
                     how-to-use-custom-application-fonts.html
 
             """
+            super().__init__()
+
             # Load the master config file and the fonts.
             self._fontconfig_config = ffi.gc(
                 fontconfig.FcInitLoadConfigAndFonts(),
                 fontconfig.FcConfigDestroy)
-            if _check_font_configuration(self._fontconfig_config):
-                self.font_map = ffi.gc(
-                    pangocairo.pango_cairo_font_map_new_for_font_type(
-                        cairo.FONT_TYPE_FT),
-                    gobject.g_object_unref)
-                pangoft2.pango_fc_font_map_set_config(
-                    ffi.cast('PangoFcFontMap *', self.font_map),
-                    self._fontconfig_config)
-                # pango_fc_font_map_set_config keeps a reference to config
-                fontconfig.FcConfigDestroy(self._fontconfig_config)
-            else:
-                self.font_map = None
 
             # On Windows the font tempfiles cannot be deleted,
             # putting them in a subfolder made my life easier.
@@ -279,8 +274,18 @@ else:
                     self._tempdir = None
             self._filenames = []
 
+            if _check_font_configuration(self._fontconfig_config):
+                self.config_is_ok = True
+
+        def set_font_map_config(self, font_map):
+            """Set current Fontconfig configuration to given font map."""
+            if self.config_is_ok:
+                pangoft2.pango_fc_font_map_set_config(
+                    ffi.cast('PangoFcFontMap *', font_map),
+                    self._fontconfig_config)
+
         def add_font_face(self, rule_descriptors, url_fetcher):
-            if self.font_map is None:
+            if not self.config_is_ok:
                 return
             for font_type, url in rule_descriptors['src']:
                 if url is None:

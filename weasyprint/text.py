@@ -162,6 +162,7 @@ ffi.cdef('''
         PangoFontDescription *desc, PangoWeight weight);
     void pango_font_description_set_absolute_size (
         PangoFontDescription *desc, double size);
+    PangoFontMap * pango_context_get_font_map (PangoContext *context);
 
     PangoFontMetrics * pango_context_get_metrics (
         PangoContext *context, const PangoFontDescription *desc,
@@ -199,8 +200,6 @@ ffi.cdef('''
     PangoLanguage * pango_language_get_default (void);
     void pango_context_set_language (
         PangoContext *context, PangoLanguage *language);
-    void pango_context_set_font_map (
-        PangoContext *context, PangoFontMap *font_map);
 
     void pango_layout_line_get_extents (
         PangoLayoutLine *line,
@@ -637,9 +636,9 @@ class Layout(object):
                 'cairo_t *', CAIRO_DUMMY_CONTEXT[hinting]._pointer)),
             gobject.g_object_unref)
         pango_context = pango.pango_layout_get_context(self.layout)
-        if context and context.font_config.font_map:
-            pango.pango_context_set_font_map(
-                pango_context, context.font_config.font_map)
+        if context:
+            context.font_config.set_font_map_config(
+                pango.pango_context_get_font_map(pango_context))
         self.font = ffi.gc(
             pango.pango_font_description_new(),
             pango.pango_font_description_free)
