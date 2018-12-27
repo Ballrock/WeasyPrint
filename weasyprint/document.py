@@ -12,6 +12,7 @@ import io
 import locale
 import math
 import shutil
+import sys
 import warnings
 
 import cairocffi as cairo
@@ -85,12 +86,17 @@ def _get_matrix(box):
 def _locale_float(number):
     """Format ``number`` according to current locale.
 
-    Same as `'{:n}'.format(number)`, but without Python's bug 33954.
+    Always return locale-independent results for Windows, see
+    https://github.com/Kozea/WeasyPrint/issues/742.
 
-    https://bugs.python.org/issue33954
+    Otherwise, same as `'{:n}'.format(number)`, but without Python's bug 33954,
+    see https://bugs.python.org/issue33954.
 
     """
-    return locale.format_string('%f', number)
+    if sys.platform.startswith('win'):
+        return '%f' % number
+    else:
+        return locale.format_string('%f', number)
 
 
 def rectangle_aabb(matrix, pos_x, pos_y, width, height):
